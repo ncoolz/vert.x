@@ -84,6 +84,11 @@ public class AddressResolverOptions {
    */
   public static final boolean DEFAULT_ROTATE_SERVERS = AddressResolver.DEFAULT_ROTATE_RESOLV_OPTION;
 
+  /**
+   * The default value of refresh hosts file entries = false
+   */
+  public static final boolean DEFAULT_REFRESH_HOSTS_FILE_ENTRIES = false;
+
   private String hostsPath;
   private Buffer hostsValue;
   private List<String> servers;
@@ -97,6 +102,7 @@ public class AddressResolverOptions {
   private List<String> searchDomains;
   private int ndots;
   private boolean rotateServers;
+  private boolean refreshHostsFileEntries;
 
   public AddressResolverOptions() {
     servers = DEFAULT_SERVERS;
@@ -110,6 +116,7 @@ public class AddressResolverOptions {
     searchDomains = DEFAULT_SEACH_DOMAINS;
     ndots = DEFAULT_NDOTS;
     rotateServers = DEFAULT_ROTATE_SERVERS;
+    refreshHostsFileEntries = DEFAULT_REFRESH_HOSTS_FILE_ENTRIES;
   }
 
   public AddressResolverOptions(AddressResolverOptions other) {
@@ -126,6 +133,7 @@ public class AddressResolverOptions {
     this.searchDomains = other.searchDomains != null ? new ArrayList<>(other.searchDomains) : null;
     this.ndots = other.ndots;
     this.rotateServers = other.rotateServers;
+    this.refreshHostsFileEntries = other.refreshHostsFileEntries;
   }
 
   public AddressResolverOptions(JsonObject json) {
@@ -420,6 +428,13 @@ public class AddressResolverOptions {
   }
 
   /**
+   * @return the value {@code true} when
+   */
+  public boolean isRefreshHostsFileEntries() {
+    return refreshHostsFileEntries;
+  }
+
+  /**
    * Set to {@code true} to enable round-robin selection of the dns server to use. It spreads the query load
    * among the servers and avoids all lookup to hit the first server of the list.
    *
@@ -445,7 +460,8 @@ public class AddressResolverOptions {
     if (!Objects.equals(searchDomains, that.searchDomains)) return false;
     if (ndots != that.ndots) return false;
     if  (servers != null ? !servers.equals(that.servers) : that.servers != null) return false;
-    return rotateServers == that.rotateServers;
+    if (rotateServers != that.rotateServers) return false;
+    return refreshHostsFileEntries == that.refreshHostsFileEntries;
   }
 
   @Override
@@ -461,6 +477,7 @@ public class AddressResolverOptions {
     result = 31 * result + ndots;
     result = 31 * result + Boolean.hashCode(rdFlag);
     result = 31 * result + Boolean.hashCode(rotateServers);
+    result = 31 * result + Boolean.hashCode(refreshHostsFileEntries);
     return result;
   }
 

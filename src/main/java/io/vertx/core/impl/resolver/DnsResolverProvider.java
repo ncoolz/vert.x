@@ -28,6 +28,8 @@ import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxException;
 import io.vertx.core.dns.AddressResolverOptions;
+import io.vertx.core.file.FileModifyWatcher;
+import io.vertx.core.file.impl.HostsFileModifyWatcher;
 import io.vertx.core.impl.AddressResolver;
 import io.vertx.core.impl.VertxImpl;
 import io.vertx.core.spi.resolver.ResolverProvider;
@@ -59,6 +61,7 @@ public class DnsResolverProvider implements ResolverProvider {
   private final List<ResolverRegistration> resolvers = Collections.synchronizedList(new ArrayList<>());
   private AddressResolverGroup<InetSocketAddress> resolverGroup;
   private final List<InetSocketAddress> serverList = new ArrayList<>();
+  private FileModifyWatcher hostsFileWatcher;
 
   /**
    * @return a list of DNS servers available to use
@@ -102,25 +105,15 @@ public class DnsResolverProvider implements ResolverProvider {
     DnsServerAddresses nameServerAddresses = options.isRotateServers() ? DnsServerAddresses.rotational(serverList) : DnsServerAddresses.sequential(serverList);
     DnsServerAddressStreamProvider nameServerAddressProvider = hostname -> nameServerAddresses.stream();
 
-    HostsFileEntries entries;
-    if (options.getHostsPath() != null) {
-      File file = vertx.resolveFile(options.getHostsPath()).getAbsoluteFile();
-      try {
-        if (!file.exists() || !file.isFile()) {
-          throw new IOException();
+    HostsFileEntries entries = createEntries(vertx, options);
+
+    if (options.isRefreshHostsFileEntries()) {
+      hostsFileWatcher = new HostsFileModifyWatcher(vertx, options.getHostsPath());
+      hostsFileWatcher.watch(path -> {
+        if (path != null) {
+          createEntries(vertx, options);
         }
-        entries = HostsFileParser.parse(file);
-      } catch (IOException e) {
-        throw new VertxException("Cannot read hosts file " + file.getAbsolutePath());
-      }
-    } else if (options.getHostsValue() != null) {
-      try {
-        entries = HostsFileParser.parse(new StringReader(options.getHostsValue().toString()));
-      } catch (IOException e) {
-        throw new VertxException("Cannot read hosts config ", e);
-      }
-    } else {
-      entries = HostsFileParser.parseSilently();
+      });
     }
 
     int minTtl = intValue(options.getCacheMinTimeToLive(), 0);
@@ -192,6 +185,30 @@ public class DnsResolverProvider implements ResolverProvider {
     };
   }
 
+  private static HostsFileEntries createEntries(VertxImpl vertx, AddressResolverOptions options) throws VertxException {
+    HostsFileEntries entries;
+    if (options.getHostsPath() != null) {
+      File file = vertx.resolveFile(options.getHostsPath()).getAbsoluteFile();
+      try {
+        if (!file.exists() || !file.isFile()) {
+          throw new IOException();
+        }
+        entries = HostsFileParser.parse(file);
+      } catch (IOException e) {
+        throw new VertxException("Cannot read hosts file " + file.getAbsolutePath());
+      }
+    } else if (options.getHostsValue() != null) {
+      try {
+        entries = HostsFileParser.parse(new StringReader(options.getHostsValue().toString()));
+      } catch (IOException e) {
+        throw new VertxException("Cannot read hosts config ", e);
+      }
+    } else {
+      entries = HostsFileParser.parseSilently();
+    }
+    return entries;
+  }
+
   private static class ResolverRegistration {
     private final io.netty.resolver.AddressResolver<InetSocketAddress> resolver;
     private final EventLoop executor;
@@ -227,6 +244,10 @@ public class DnsResolverProvider implements ResolverProvider {
       } else {
         registration.executor.execute(task);
       }
+    }
+
+    if (hostsFileWatcher != null) {
+      hostsFileWatcher.close();
     }
   }
 }
